@@ -40,7 +40,7 @@ let memoryDb = {
             id: 'netflix', 
             name: 'Netflix Sharing 1 Bulan', 
             price: 25000, 
-            discount: 5000, 
+            discount: 0, 
             type: 'login_link', 
             link: 'https://netflix.com/?nftoken=Bgj8vOvcAxL+AZBki/F8Xx3nvNypLUCmPRbUwMbTGGBCNB0Kc6yJf/L+hLivhJNa0QZUVYWqYcxKXY8BFpgImYJNdTZ7Z6w0wHLuJZK+FdAz5xG7pf4coYTk0ddHg7iMxAjELcLIZdDPA4cAqk3IifoCGvqEeOsP7/kjTlMl1StY4lO0Ve60Qb2ykRkmZV5tG1laM+w6O6zQDzRltL7lUecuWEzEIAiEPbL469IzD/IF7EnOouBneWYLmLtp3qgIq0rc1a9uLhF1/4uK5EjYl8abXDTsXweDmYTAdXE/LFN+ZJGFZXmdsV53m0xBFI6SQJ/SHgNFKXYh6WGJSFbppHYvPSquSmovGAYiDgoMY7yu7o0FX9VKu/pP' 
         }
