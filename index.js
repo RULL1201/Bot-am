@@ -14,14 +14,36 @@ const PG_APIKEY = 'ak_live_c0bd68a111514536b8918d8884decce10020c4fcf1';
 // 👑 MASUKKAN ID TELEGRAM KAMU DI SINI (ANGKA)
 const OWNER_ID = '6161191871'; 
 
-// ================= DATABASE DI DALAM MEMORI (ANTI HILANG) =================
+// ================= DAFTAR PRODUK PERMANEN =================
+// TAMBAHKAN PRODUK KAMU DI SINI AGAR TIDAK AKAN PERNAH HILANG / ERROR
 let memoryDb = {
     users: [],
     income: [], 
     products: {
-        'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' }
-        // Kamu bisa tambah produk permanen di sini jika mau, contoh:
-        // 'canva': { id: 'canva', name: 'Canva Pro', price: 15000, discount: 0, type: 'login_link', link: 'https://t.me/link_akses_kamu' }
+        'am': { 
+            id: 'am', 
+            name: 'Alight Motion Premium', 
+            price: 10000, 
+            discount: 0, 
+            type: 'magic_link' 
+        },
+        // Contoh produk lain (ubah/tambah sesuai keinginanmu di sini):
+        'canva': { 
+            id: 'canva', 
+            name: 'Canva Pro 1 Tahun', 
+            price: 15000, 
+            discount: 0, 
+            type: 'login_link', 
+            link: 'https://www.canva.com/brand/join?token=CONTOH_LINK_KAMU' 
+        },
+        'netflix': { 
+            id: 'netflix', 
+            name: 'Netflix Sharing 1 Bulan', 
+            price: 25000, 
+            discount: 5000, 
+            type: 'login_link', 
+            link: 'https://netflix.com/?nftoken=Bgj8vOvcAxL+AZBki/F8Xx3nvNypLUCmPRbUwMbTGGBCNB0Kc6yJf/L+hLivhJNa0QZUVYWqYcxKXY8BFpgImYJNdTZ7Z6w0wHLuJZK+FdAz5xG7pf4coYTk0ddHg7iMxAjELcLIZdDPA4cAqk3IifoCGvqEeOsP7/kjTlMl1StY4lO0Ve60Qb2ykRkmZV5tG1laM+w6O6zQDzRltL7lUecuWEzEIAiEPbL469IzD/IF7EnOouBneWYLmLtp3qgIq0rc1a9uLhF1/4uK5EjYl8abXDTsXweDmYTAdXE/LFN+ZJGFZXmdsV53m0xBFI6SQJ/SHgNFKXYh6WGJSFbppHYvPSquSmovGAYiDgoMY7yu7o0FX9VKu/pP' 
+        }
     }
 };
 
@@ -96,10 +118,6 @@ bot.onText(/\/owner/, (msg) => {
     const keyboard = {
         inline_keyboard: [
             [
-                { text: "➕ Tambah Produk", callback_data: `admin_add_product` },
-                { text: "🗑️ Hapus Produk", callback_data: `admin_del_product` }
-            ],
-            [
                 { text: "✏️ Ubah Harga", callback_data: `admin_edit_price` }, 
                 { text: "✂️ Atur Diskon", callback_data: `admin_edit_discount` }
             ],
@@ -124,7 +142,7 @@ bot.on('callback_query', async (query) => {
         const productId = data.split('_')[1];
         const product = memoryDb.products[productId];
 
-        if (!product) return bot.sendMessage(chatId, "⚠️ Produk tidak ditemukan atau sudah dihapus. Ketik /order untuk memperbarui daftar.");
+        if (!product) return bot.sendMessage(chatId, "⚠️ Produk tidak ditemukan. Ketik /order untuk memperbarui daftar.");
 
         userSessions[chatId] = { productId: product.id };
 
@@ -182,23 +200,6 @@ bot.on('callback_query', async (query) => {
         if (data === 'admin_broadcast') {
             adminSessions[chatId] = { action: 'WAITING_BROADCAST_MSG' };
             bot.sendMessage(chatId, "📢 Kirimkan pesan yang ingin di-broadcast ke seluruh pengguna bot (Bisa teks/foto):");
-        } 
-        else if (data === 'admin_add_product') {
-            adminSessions[chatId] = { action: 'WAITING_NEW_PRODUCT_NAME' };
-            bot.sendMessage(chatId, "Tuliskan *Nama Produk Baru*:", { parse_mode: "Markdown" });
-        }
-        else if (data === 'admin_del_product') {
-            const listProd = Object.values(memoryDb.products).filter(p => p.id !== 'am');
-            if (listProd.length === 0) return bot.sendMessage(chatId, "Tidak ada produk tambahan yang bisa dihapus.");
-            
-            const keyboard = listProd.map(p => [{ text: `🗑️ ${p.name}`, callback_data: `delprod_${p.id}` }]);
-            bot.sendMessage(chatId, "Pilih produk yang ingin dihapus:", { reply_markup: { inline_keyboard: keyboard } });
-        }
-        else if (data.startsWith('delprod_')) {
-            const prodId = data.split('_')[1];
-            const namaProd = memoryDb.products[prodId]?.name;
-            delete memoryDb.products[prodId];
-            bot.sendMessage(chatId, `✅ Produk *${namaProd}* berhasil dihapus!`, { parse_mode: "Markdown" });
         }
         else if (data === 'admin_edit_price' || data === 'admin_edit_discount') {
             const isPrice = data === 'admin_edit_price';
@@ -281,38 +282,6 @@ bot.on('message', async (msg) => {
             resetAdminSession(chatId);
             return;
         }
-        
-        else if (adminAct.action === 'WAITING_NEW_PRODUCT_NAME') {
-            adminAct.prodName = text;
-            adminAct.action = 'WAITING_NEW_PRODUCT_PRICE';
-            bot.sendMessage(chatId, "Kirimkan *Harga* untuk produk ini (Angka saja, cth: 15000):", { parse_mode: "Markdown" });
-            return;
-        }
-        else if (adminAct.action === 'WAITING_NEW_PRODUCT_PRICE') {
-            const price = parseInt(text);
-            if (isNaN(price)) return bot.sendMessage(chatId, "Harap masukkan angka saja.");
-            adminAct.prodPrice = price;
-            adminAct.action = 'WAITING_NEW_PRODUCT_LINK';
-            bot.sendMessage(chatId, "Kirimkan *Link Login / Akses* yang akan otomatis dikirimkan ke pembeli setelah mereka membayar:", { parse_mode: "Markdown" });
-            return;
-        }
-        else if (adminAct.action === 'WAITING_NEW_PRODUCT_LINK') {
-            const link = text;
-            const prodId = 'prod_' + Date.now(); 
-            
-            memoryDb.products[prodId] = { 
-                id: prodId, 
-                name: adminAct.prodName, 
-                price: adminAct.prodPrice, 
-                discount: 0, 
-                type: 'login_link',
-                link: link 
-            };
-            
-            bot.sendMessage(chatId, `✅ *Produk berhasil ditambahkan!*\n\nNama: ${adminAct.prodName}\nHarga: Rp ${adminAct.prodPrice}\nLink Login: ${link}`, { parse_mode: "Markdown" });
-            resetAdminSession(chatId);
-            return;
-        }
 
         else if (adminAct.action === 'WAITING_NEW_PRICE' || adminAct.action === 'WAITING_NEW_DISCOUNT') {
             const amount = parseInt(text);
@@ -364,4 +333,4 @@ bot.on('message', async (msg) => {
     }
 });
 
-console.log("🤖 Bot berjalan murni di memori (Tanpa database file)...");
+console.log("🤖 Bot berjalan stabil dengan produk permanen...");
