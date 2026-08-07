@@ -8,14 +8,14 @@ const bot = new TelegramBot(token, { polling: true });
 const AM_API = 'https://restapidhan.vercel.app';
 const AM_APIKEY = 'freeapikeydhan26';
 
-const PG_API = 'https://sobat.aksespg.qzz.io';
-const PG_APIKEY = 'ak_live_c0bd68a111514536b8918d8884decce10020c4fcf1';
+// Konfigurasi Payment Gateway Tokoshopp (Artan Shop) sesuai dokumentasi
+const PG_API = 'https://tokoshopp.web.id';
+const PG_APIKEY = 'artan_4a8fb9cd50ade6cea5fed941bdfedfb2aed2c663';
 
 // 👑 MASUKKAN ID TELEGRAM KAMU DI SINI (ANGKA)
 const OWNER_ID = '6161191871'; 
 
 // ================= DAFTAR PRODUK PERMANEN =================
-// TAMBAHKAN PRODUK KAMU DI SINI AGAR TIDAK AKAN PERNAH HILANG / ERROR
 let memoryDb = {
     users: [],
     income: [], 
@@ -27,7 +27,6 @@ let memoryDb = {
             discount: 0, 
             type: 'magic_link' 
         },
-        // Contoh produk lain (ubah/tambah sesuai keinginanmu di sini):
         'canva': { 
             id: 'canva', 
             name: 'Canva Pro 1 Tahun', 
@@ -40,9 +39,9 @@ let memoryDb = {
             id: 'netflix', 
             name: 'Netflix Sharing 1 Bulan', 
             price: 25000, 
-            discount: 0, 
+            discount: 5000, 
             type: 'login_link', 
-            link: 'https://netflix.com/?nftoken=Bgj8vOvcAxL/AQbo/qj3TanmISq1tQnTDf59eb1GiJx2sZcRswOGSe9bGXI7aSxfLyXl4aeW31y7vHRh4o3DVgJ9uEQUrMRBS6S1ewJdwnFVKLCpRWvvd2ZRjI69yEB2C/9WXjPXRjVDcAsgxurdJKF8CcttKdUt5DLNx5A0/B9cn0G85HeJ0YmNdikdm+t6FDAMatB3k/O7AIJbg+GhOwah6FDiKf3xzr8Amm4aWVdAkptXXjYKbFzlI+2pzoDvZxvmpd8jmQGQ5pMSBuTXR11WNM4adVlrzbDjUZp6rlRzBnWgO6v8KE0X4DIWBMO4EidPxO6YYG1+zuNZZ9DC65nxUB2MCcZnpBgGIg4KDPrirX4ODSV/N0J7qA=='
+            link: 'https://netflix.com/?nftoken=Bgj8vOvcAxL/AQbo/qj3TanmISq1tQnTDf59eb1GiJx2sZcRswOGSe9bGXI7aSxfLyXl4aeW31y7vHRh4o3DVgJ9uEQUrMRBS6S1ewJdwnFVKLCpRWvvd2ZRjI69yEB2C/9WXjPXRjVDcAsgxurdJKF8CcttKdUt5DLNx5A0/B9cn0G85HeJ0YmNdikdm+t6FDAMatB3k/O7AIJbg+GhOwah6FDiKf3xzr8Amm4aWVdAkptXXjYKbFzlI+2pzoDvZxvmpd8jmQGQ5pMSBuTXR11WNM4adVlrzbDjUZp6rlRzBnWgO6v8KE0X4DIWBMO4EidPxO6YYG1+zuNZZ9DC65nxUB2MCcZnpBgGIg4KDPrirX4ODSV/N0J7qA==' 
         }
     }
 };
@@ -155,20 +154,27 @@ bot.on('callback_query', async (query) => {
         }
     }
 
-    // --- LOGIKA USER CEK PEMBAYARAN ---
+    // --- LOGIKA USER CEK PEMBAYARAN (Sesuai dokumentasi baru: POST /api/payment/status) ---
     else if (data.startsWith('check_')) {
-        const depositId = data.replace('check_', '');
+        const transactionId = data.replace('check_', '');
         const session = userSessions[chatId];
 
-        if (!session || session.depositId !== depositId) return bot.sendMessage(chatId, "⚠️ Sesi kadaluarsa. Ketik /order ulang.");
+        if (!session || session.transactionId !== transactionId) return bot.sendMessage(chatId, "⚠️ Sesi kadaluarsa. Ketik /order ulang.");
         if (session.step !== 'WAITING_PAYMENT') return;
 
         try {
-            const responseCheck = await axios.get(`${PG_API}/v1/deposit/status/${depositId}`, { headers: { 'X-API-Key': PG_APIKEY } });
+            const responseCheck = await axios.post(`${PG_API}/api/payment/status`, {
+                transaction_id: transactionId
+            }, { 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-api-key': PG_APIKEY 
+                } 
+            });
             
             if (responseCheck.data && responseCheck.data.success) {
-                const status = responseCheck.data.data.status; 
-                if (status === 'success') {
+                const status = responseCheck.data.status; // status: "paid" atau "pending"
+                if (status === 'paid' || status === 'success') {
                     const product = memoryDb.products[session.productId];
                     
                     memoryDb.income.push({ date: getTodayDate(), amount: session.finalPrice });
@@ -186,12 +192,13 @@ bot.on('callback_query', async (query) => {
                 } else if (status === 'pending') {
                     bot.sendMessage(chatId, "⏳ Belum dibayar, jika sudah transfer mohon tunggu sebentar lalu klik lagi.");
                 } else {
-                    bot.sendMessage(chatId, "❌ Transaksi kadaluarsa.");
+                    bot.sendMessage(chatId, `❌ Status transaksi: ${status}`);
                     resetSession(chatId);
                 }
             }
         } catch (err) {
-            bot.sendMessage(chatId, "⚠️ Gagal mengecek status ke server.");
+            console.error("Check Error:", err.response ? err.response.data : err.message);
+            bot.sendMessage(chatId, "⚠️ Gagal mengecek status ke server pembayaran.");
         }
     }
 
@@ -224,38 +231,50 @@ bot.on('callback_query', async (query) => {
     }
 });
 
-// ================= FUNGSI BANTUAN BUAT QRIS =================
+// ================= FUNGSI BUAT QRIS (Sesuai Dok: POST /api/payment/create) =================
 async function buatTagihanQRIS(chatId, product) {
     const finalPrice = product.price - product.discount;
     const session = userSessions[chatId];
     session.finalPrice = finalPrice;
+    const orderId = `INV-${Date.now()}`;
 
     try {
-        const responsePG = await axios.post(`${PG_API}/v1/deposit/create`, { amount: finalPrice, method: "qris" }, {
-            headers: { 'X-API-Key': PG_APIKEY, 'Content-Type': 'application/json' }
+        const responsePG = await axios.post(`${PG_API}/api/payment/create`, { 
+            amount: finalPrice, 
+            order_id: orderId 
+        }, {
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-api-key': PG_APIKEY 
+            }
         });
 
         if (responsePG.data && responsePG.data.success) {
-            const depositId = responsePG.data.data.depositId;
-            const qrString = responsePG.data.data.qrString;
+            const transactionId = responsePG.data.transaction_id;
+            const qrImageBase64 = responsePG.data.qr_image; // Bentuk base64 data:image/png;base64,...
             
-            session.depositId = depositId;
+            session.transactionId = transactionId;
             session.step = 'WAITING_PAYMENT';
 
-            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrString)}`;
-            const keyboard = { inline_keyboard: [[{ text: "🔄 Cek Pembayaran", callback_data: `check_${depositId}` }]] };
+            // Mengubah base64 image string menjadi Buffer agar bisa dikirim sebagai foto oleh bot telegram
+            const base64Data = qrImageBase64.replace(/^data:image\/\w+;base64,/, "");
+            const buffer = Buffer.from(base64Data, 'base64');
+
+            const keyboard = { inline_keyboard: [[{ text: "🔄 Cek Pembayaran", callback_data: `check_${transactionId}` }]] };
             
             let infoText = `✅ *Tagihan Dibuat!*\n\nProduk: ${product.name}\n`;
             if (session.email) infoText += `Email: \`${session.email}\`\n`;
+            infoText += `ID Transaksi: \`${transactionId}\`\n`;
             infoText += `Total Bayar: *Rp ${finalPrice}*\n\nSilakan scan QRIS di atas, lalu klik tombol cek pembayaran.`;
 
-            bot.sendPhoto(chatId, qrImageUrl, { caption: infoText, parse_mode: "Markdown", reply_markup: keyboard });
+            bot.sendPhoto(chatId, buffer, { caption: infoText, parse_mode: "Markdown", reply_markup: keyboard });
         } else {
-            bot.sendMessage(chatId, "❌ Gagal membuat tagihan QRIS.");
+            bot.sendMessage(chatId, "❌ Gagal membuat tagihan QRIS dari server.");
             resetSession(chatId);
         }
     } catch (error) {
-        bot.sendMessage(chatId, "⚠️ Server pembayaran gangguan.");
+        console.error("PG Create Error:", error.response ? error.response.data : error.message);
+        bot.sendMessage(chatId, "⚠️ Server pembayaran gangguan atau API Key salah.");
         resetSession(chatId);
     }
 }
@@ -295,6 +314,7 @@ bot.on('message', async (msg) => {
                 memoryDb.products[prodId].discount = amount;
                 bot.sendMessage(chatId, `✅ Diskon ${memoryDb.products[prodId].name} berhasil diset menjadi Rp ${amount}`);
             }
+            resetAdminSession(adminActId = null);
             resetAdminSession(chatId);
             return;
         }
@@ -333,4 +353,4 @@ bot.on('message', async (msg) => {
     }
 });
 
-console.log("🤖 Bot berjalan stabil dengan produk permanen...");
+console.log("🤖 Bot berjalan stabil dengan Payment Gateway Tokoshopp (Artan Shop)...");
