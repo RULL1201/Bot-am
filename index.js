@@ -68,7 +68,7 @@ bot.onText(/\/start/, (msg) => {
     const keyboard = {
         inline_keyboard: [
             [{ text: "🛒 Beli Produk (/order)", callback_data: "menu_order" }],
-            [{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZKENTOD" }]
+            [{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZMBUT" }]
         ]
     };
 
