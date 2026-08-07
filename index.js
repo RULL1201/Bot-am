@@ -1,6 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
-const fs = require('fs');
 
 // ================= KONFIGURASI BOT & API =================
 const token = process.env.BOT_TOKEN;
@@ -12,37 +11,19 @@ const AM_APIKEY = 'freeapikeydhan26';
 const PG_API = 'https://sobat.aksespg.qzz.io';
 const PG_APIKEY = 'ak_live_c0bd68a111514536b8918d8884decce10020c4fcf1';
 
-// 👑 GANTI DENGAN ID TELEGRAM KAMU (ANGKA)
+// 👑 MASUKKAN ID TELEGRAM KAMU DI SINI (ANGKA)
 const OWNER_ID = '6161191871'; 
 
-// ================= SISTEM DATABASE PERMANEN =================
-const DB_FILE = 'database.json';
-let db = {
+// ================= DATABASE DI DALAM MEMORI (ANTI HILANG) =================
+let memoryDb = {
     users: [],
     income: [], 
-    // DAFTAR PRODUK UTAMA (AMAN DARI RESET RESTART)
     products: {
         'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' }
+        // Kamu bisa tambah produk permanen di sini jika mau, contoh:
+        // 'canva': { id: 'canva', name: 'Canva Pro', price: 15000, discount: 0, type: 'login_link', link: 'https://t.me/link_akses_kamu' }
     }
 };
-
-function loadDB() {
-    if (fs.existsSync(DB_FILE)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-            if (data.users) db.users = data.users;
-            if (data.income) db.income = data.income;
-            // Gabungkan produk bawaan dengan produk tambahan yang pernah disimpan
-            if (data.products) {
-                db.products = { ...db.products, ...data.products };
-            }
-        } catch (e) {}
-    }
-}
-function saveDB() {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
-loadDB(); 
 
 // ================= SISTEM SESI =================
 const userSessions = {};
@@ -58,9 +39,8 @@ function getThisMonth() { return new Date().toISOString().slice(0, 7); }
 
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-    if (!db.users.includes(chatId)) {
-        db.users.push(chatId);
-        saveDB();
+    if (!memoryDb.users.includes(chatId)) {
+        memoryDb.users.push(chatId);
     }
     bot.sendMessage(chatId, "👋 Halo! Selamat datang di Bot Auto Order.\n\nKetik /order untuk melihat daftar produk.\nKetik /cancel untuk membatalkan pesanan.");
 });
@@ -73,7 +53,7 @@ bot.onText(/\/cancel/, (msg) => {
 
 bot.onText(/\/order/, (msg) => {
     const chatId = msg.chat.id;
-    const products = Object.values(db.products);
+    const products = Object.values(memoryDb.products);
 
     if (products.length === 0) return bot.sendMessage(chatId, "Mohon maaf, saat ini tidak ada produk yang tersedia.");
 
@@ -102,13 +82,13 @@ bot.onText(/\/owner/, (msg) => {
     let dailyIncome = 0;
     let monthlyIncome = 0;
     
-    db.income.forEach(trx => {
+    memoryDb.income.forEach(trx => {
         if (trx.date === today) dailyIncome += trx.amount;
         if (trx.date.startsWith(month)) monthlyIncome += trx.amount;
     });
 
     const caption = `👑 *DASHBOARD OWNER*\n\n` +
-                    `👥 Total Pengguna: *${db.users.length}*\n` +
+                    `👥 Total Pengguna: *${memoryDb.users.length}*\n` +
                     `💰 Pendapatan Hari Ini: *Rp ${dailyIncome}*\n` +
                     `💳 Pendapatan Bulan Ini: *Rp ${monthlyIncome}*\n\n` +
                     `Pilih menu di bawah:`;
@@ -142,7 +122,7 @@ bot.on('callback_query', async (query) => {
     // --- LOGIKA USER MEMBELI ---
     if (data.startsWith('buy_')) {
         const productId = data.split('_')[1];
-        const product = db.products[productId];
+        const product = memoryDb.products[productId];
 
         if (!product) return bot.sendMessage(chatId, "⚠️ Produk tidak ditemukan atau sudah dihapus. Ketik /order untuk memperbarui daftar.");
 
@@ -171,10 +151,9 @@ bot.on('callback_query', async (query) => {
             if (responseCheck.data && responseCheck.data.success) {
                 const status = responseCheck.data.data.status; 
                 if (status === 'success') {
-                    const product = db.products[session.productId];
+                    const product = memoryDb.products[session.productId];
                     
-                    db.income.push({ date: getTodayDate(), amount: session.finalPrice });
-                    saveDB();
+                    memoryDb.income.push({ date: getTodayDate(), amount: session.finalPrice });
 
                     bot.sendMessage(OWNER_ID, `💸 *PEMBAYARAN MASUK!*\nProduk: ${product.name}\nHarga: Rp ${session.finalPrice}`, { parse_mode: "Markdown" });
 
@@ -209,7 +188,7 @@ bot.on('callback_query', async (query) => {
             bot.sendMessage(chatId, "Tuliskan *Nama Produk Baru*:", { parse_mode: "Markdown" });
         }
         else if (data === 'admin_del_product') {
-            const listProd = Object.values(db.products).filter(p => p.id !== 'am');
+            const listProd = Object.values(memoryDb.products).filter(p => p.id !== 'am');
             if (listProd.length === 0) return bot.sendMessage(chatId, "Tidak ada produk tambahan yang bisa dihapus.");
             
             const keyboard = listProd.map(p => [{ text: `🗑️ ${p.name}`, callback_data: `delprod_${p.id}` }]);
@@ -217,9 +196,8 @@ bot.on('callback_query', async (query) => {
         }
         else if (data.startsWith('delprod_')) {
             const prodId = data.split('_')[1];
-            const namaProd = db.products[prodId]?.name;
-            delete db.products[prodId];
-            saveDB();
+            const namaProd = memoryDb.products[prodId]?.name;
+            delete memoryDb.products[prodId];
             bot.sendMessage(chatId, `✅ Produk *${namaProd}* berhasil dihapus!`, { parse_mode: "Markdown" });
         }
         else if (data === 'admin_edit_price' || data === 'admin_edit_discount') {
@@ -227,7 +205,7 @@ bot.on('callback_query', async (query) => {
             const actionType = isPrice ? 'WAITING_SELECT_PRICE' : 'WAITING_SELECT_DISCOUNT';
             adminSessions[chatId] = { action: actionType };
 
-            const keyboard = Object.values(db.products).map(p => [{ text: p.name, callback_data: `editprod_${p.id}` }]);
+            const keyboard = Object.values(memoryDb.products).map(p => [{ text: p.name, callback_data: `editprod_${p.id}` }]);
             bot.sendMessage(chatId, `Pilih produk yang ingin diubah ${isPrice ? 'Harganya' : 'Diskonnya'}:`, { reply_markup: { inline_keyboard: keyboard } });
         }
         else if (data.startsWith('editprod_')) {
@@ -236,10 +214,10 @@ bot.on('callback_query', async (query) => {
 
             if (adminAct === 'WAITING_SELECT_PRICE') {
                 adminSessions[chatId] = { action: 'WAITING_NEW_PRICE', prodId: prodId };
-                bot.sendMessage(chatId, `Kirimkan harga baru (Angka saja) untuk produk: ${db.products[prodId].name}`);
+                bot.sendMessage(chatId, `Kirimkan harga baru (Angka saja) untuk produk: ${memoryDb.products[prodId].name}`);
             } else if (adminAct === 'WAITING_SELECT_DISCOUNT') {
                 adminSessions[chatId] = { action: 'WAITING_NEW_DISCOUNT', prodId: prodId };
-                bot.sendMessage(chatId, `Kirimkan jumlah diskon (Angka saja) untuk produk: ${db.products[prodId].name}`);
+                bot.sendMessage(chatId, `Kirimkan jumlah diskon (Angka saja) untuk produk: ${memoryDb.products[prodId].name}`);
             }
         }
     }
@@ -296,7 +274,7 @@ bot.on('message', async (msg) => {
         if (adminAct.action === 'WAITING_BROADCAST_MSG') {
             bot.sendMessage(chatId, "📢 Mengirim broadcast...");
             let count = 0;
-            for (let userId of db.users) {
+            for (let userId of memoryDb.users) {
                 try { await bot.copyMessage(userId, chatId, msg.message_id); count++; } catch (e) {} 
             }
             bot.sendMessage(chatId, `✅ Broadcast selesai terkirim ke ${count} pengguna.`);
@@ -322,7 +300,7 @@ bot.on('message', async (msg) => {
             const link = text;
             const prodId = 'prod_' + Date.now(); 
             
-            db.products[prodId] = { 
+            memoryDb.products[prodId] = { 
                 id: prodId, 
                 name: adminAct.prodName, 
                 price: adminAct.prodPrice, 
@@ -330,7 +308,6 @@ bot.on('message', async (msg) => {
                 type: 'login_link',
                 link: link 
             };
-            saveDB();
             
             bot.sendMessage(chatId, `✅ *Produk berhasil ditambahkan!*\n\nNama: ${adminAct.prodName}\nHarga: Rp ${adminAct.prodPrice}\nLink Login: ${link}`, { parse_mode: "Markdown" });
             resetAdminSession(chatId);
@@ -343,13 +320,12 @@ bot.on('message', async (msg) => {
             
             const prodId = adminAct.prodId;
             if (adminAct.action === 'WAITING_NEW_PRICE') {
-                db.products[prodId].price = amount;
-                bot.sendMessage(chatId, `✅ Harga ${db.products[prodId].name} berhasil diubah menjadi Rp ${amount}`);
+                memoryDb.products[prodId].price = amount;
+                bot.sendMessage(chatId, `✅ Harga ${memoryDb.products[prodId].name} berhasil diubah menjadi Rp ${amount}`);
             } else {
-                db.products[prodId].discount = amount;
-                bot.sendMessage(chatId, `✅ Diskon ${db.products[prodId].name} berhasil diset menjadi Rp ${amount}`);
+                memoryDb.products[prodId].discount = amount;
+                bot.sendMessage(chatId, `✅ Diskon ${memoryDb.products[prodId].name} berhasil diset menjadi Rp ${amount}`);
             }
-            saveDB();
             resetAdminSession(chatId);
             return;
         }
@@ -363,7 +339,7 @@ bot.on('message', async (msg) => {
         if (!text.includes('@') || !text.includes('.')) return bot.sendMessage(chatId, "⚠️ Format email salah.");
         session.email = text;
         
-        const product = db.products[session.productId];
+        const product = memoryDb.products[session.productId];
         bot.sendMessage(chatId, "⏳ Sedang membuat kode QRIS...");
         buatTagihanQRIS(chatId, product);
     }
@@ -388,4 +364,4 @@ bot.on('message', async (msg) => {
     }
 });
 
-console.log("🤖 Bot berjalan stabil dengan perbaikan sistem database produk...");
+console.log("🤖 Bot berjalan murni di memori (Tanpa database file)...");
