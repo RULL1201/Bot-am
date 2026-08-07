@@ -21,7 +21,11 @@ let db = {
     users: [],
     income: [], 
     products: {
-        'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' }
+        'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' },
+        
+        // --- CONTOH MENAMBAHKAN PRODUK PERMANEN DI SINI ---
+        'canva': { id: 'canva', name: 'Canva Pro', price: 15000, discount: 0, type: 'login_link', link: 'https://www.canva.com/brand/join?token=xxxxxx' },
+        'netflix': { id: 'netflix', name: 'Netflix Premium', price: 25000, discount: 5000, type: 'login_link', link: 'https://www.netflix.com/your-invite-link' }
     }
 };
 
