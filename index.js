@@ -15,11 +15,12 @@ const PG_APIKEY = 'ak_live_c0bd68a111514536b8918d8884decce10020c4fcf1';
 // 👑 GANTI DENGAN ID TELEGRAM KAMU (ANGKA)
 const OWNER_ID = '6161191871'; 
 
-// ================= SISTEM DATABASE LOKAL =================
+// ================= SISTEM DATABASE PERMANEN =================
 const DB_FILE = 'database.json';
 let db = {
     users: [],
     income: [], 
+    // DAFTAR PRODUK UTAMA (AMAN DARI RESET RESTART)
     products: {
         'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' }
     }
@@ -29,9 +30,12 @@ function loadDB() {
     if (fs.existsSync(DB_FILE)) {
         try {
             const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-            if (data.products) db.products = data.products;
             if (data.users) db.users = data.users;
             if (data.income) db.income = data.income;
+            // Gabungkan produk bawaan dengan produk tambahan yang pernah disimpan
+            if (data.products) {
+                db.products = { ...db.products, ...data.products };
+            }
         } catch (e) {}
     }
 }
@@ -144,13 +148,10 @@ bot.on('callback_query', async (query) => {
 
         userSessions[chatId] = { productId: product.id };
 
-        // CEK APAKAH PRODUK ALIGHT MOTION (AM) ATAU BUKAN
         if (product.id === 'am') {
-            // AM butuh email dulu sebelum bayar
             userSessions[chatId].step = 'WAITING_EMAIL';
             bot.sendMessage(chatId, `Membeli: *${product.name}*\n\n✉️ *Silakan kirimkan alamat Email kamu* yang akan dijadikan Premium:`, { parse_mode: "Markdown" });
         } else {
-            // Produk lain (non-AM) langsung buat QRIS tanpa minta email
             bot.sendMessage(chatId, `⏳ Memproses tagihan untuk *${product.name}*...`, { parse_mode: "Markdown" });
             buatTagihanQRIS(chatId, product);
         }
@@ -178,11 +179,9 @@ bot.on('callback_query', async (query) => {
                     bot.sendMessage(OWNER_ID, `💸 *PEMBAYARAN MASUK!*\nProduk: ${product.name}\nHarga: Rp ${session.finalPrice}`, { parse_mode: "Markdown" });
 
                     if (product.id === 'am') {
-                        // Lanjut minta Magic Link khusus AM
                         session.step = 'WAITING_MAGIC_LINK';
                         bot.sendMessage(chatId, `✅ *Pembayaran Lunas!*\n\nSilakan buka email kamu (\`${session.email}\`), Copy *Magic Link* dari Alight Motion, lalu *Kirimkan ke sini*.`, { parse_mode: "Markdown" });
                     } else {
-                        // Produk lain langsung kirim Link Login ke Pembeli
                         const pesanSukses = `🎉 *Pembayaran Lunas & Berhasil!*\n\nTerima kasih telah membeli *${product.name}*.\n\nBerikut adalah *Link Akses / Login* kamu:\n${product.link}\n\nSelamat menggunakan!`;
                         bot.sendMessage(chatId, pesanSukses, { parse_mode: "Markdown" });
                         resetSession(chatId); 
@@ -210,7 +209,6 @@ bot.on('callback_query', async (query) => {
             bot.sendMessage(chatId, "Tuliskan *Nama Produk Baru*:", { parse_mode: "Markdown" });
         }
         else if (data === 'admin_del_product') {
-            // Filter agar produk 'am' (Alight Motion utama) tidak bisa dihapus secara tidak sengaja
             const listProd = Object.values(db.products).filter(p => p.id !== 'am');
             if (listProd.length === 0) return bot.sendMessage(chatId, "Tidak ada produk tambahan yang bisa dihapus.");
             
@@ -306,7 +304,6 @@ bot.on('message', async (msg) => {
             return;
         }
         
-        // Alur Admin Tambah Produk Baru
         else if (adminAct.action === 'WAITING_NEW_PRODUCT_NAME') {
             adminAct.prodName = text;
             adminAct.action = 'WAITING_NEW_PRODUCT_PRICE';
@@ -340,7 +337,6 @@ bot.on('message', async (msg) => {
             return;
         }
 
-        // Alur Admin Ubah Harga & Diskon
         else if (adminAct.action === 'WAITING_NEW_PRICE' || adminAct.action === 'WAITING_NEW_DISCOUNT') {
             const amount = parseInt(text);
             if (isNaN(amount)) return bot.sendMessage(chatId, "Harap masukkan angka saja.");
@@ -363,7 +359,6 @@ bot.on('message', async (msg) => {
     const session = userSessions[chatId];
     if (!session || !text) return;
 
-    // Tahap Input Email khusus Alight Motion
     if (session.step === 'WAITING_EMAIL') {
         if (!text.includes('@') || !text.includes('.')) return bot.sendMessage(chatId, "⚠️ Format email salah.");
         session.email = text;
@@ -373,7 +368,6 @@ bot.on('message', async (msg) => {
         buatTagihanQRIS(chatId, product);
     }
 
-    // Tahap Proses AM (Magic Link)
     else if (session.step === 'WAITING_MAGIC_LINK') {
         if (!text.includes('http')) return bot.sendMessage(chatId, "⚠️ Harap masukkan URL (Link) yang valid.");
         bot.sendMessage(chatId, "⏳ Memproses Magic Link ke server...");
@@ -394,4 +388,4 @@ bot.on('message', async (msg) => {
     }
 });
 
-console.log("🤖 Bot berjalan dengan pemisahan Alur AM dan Fitur Hapus Produk...");
+console.log("🤖 Bot berjalan stabil dengan perbaikan sistem database produk...");
