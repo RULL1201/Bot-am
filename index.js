@@ -101,7 +101,7 @@ function kirimKatalogProduk(chatId) {
     });
 
     // Tambahkan tombol Hubungi Admin di bawah katalog produk juga
-    keyboard.push([{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZKENTOD" }]);
+    keyboard.push([{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZMBUT" }]);
 
     bot.sendMessage(chatId, "🛒 *Pilih Produk yang ingin dibeli:*", {
         parse_mode: "Markdown",
