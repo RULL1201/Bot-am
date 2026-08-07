@@ -13,7 +13,7 @@ const PG_API = 'https://sobat.aksespg.qzz.io';
 const PG_APIKEY = 'ak_live_c0bd68a111514536b8918d8884decce10020c4fcf1';
 
 // 👑 GANTI DENGAN ID TELEGRAM KAMU (ANGKA)
-const OWNER_ID = '6161191871'; 
+const OWNER_ID = 'GANTI_DENGAN_ID_TELEGRAM_KAMU'; 
 
 // ================= SISTEM DATABASE LOKAL =================
 const DB_FILE = 'database.json';
@@ -21,17 +21,18 @@ let db = {
     users: [],
     income: [], 
     products: {
-        'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' },
-        
-        // --- CONTOH MENAMBAHKAN PRODUK PERMANEN DI SINI ---
-        'canva': { id: 'canva', name: 'Canva Pro', price: 15000, discount: 0, type: 'login_link', link: 'https://www.canva.com/brand/join?token=xxxxxx' },
-        'netflix': { id: 'netflix', name: 'Netflix Premium', price: 25000, discount: 5000, type: 'login_link', link: 'https://www.netflix.com/your-invite-link' }
+        'am': { id: 'am', name: 'Alight Motion Premium', price: 10000, discount: 0, type: 'magic_link' }
     }
 };
 
 function loadDB() {
     if (fs.existsSync(DB_FILE)) {
-        db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        try {
+            const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+            if (data.products) db.products = data.products;
+            if (data.users) db.users = data.users;
+            if (data.income) db.income = data.income;
+        } catch (e) {}
     }
 }
 function saveDB() {
@@ -110,9 +111,17 @@ bot.onText(/\/owner/, (msg) => {
 
     const keyboard = {
         inline_keyboard: [
-            [{ text: "➕ Tambah Produk Baru", callback_data: `admin_add_product` }],
-            [{ text: "✏️ Ubah Harga", callback_data: `admin_edit_price` }, { text: "✂️ Atur Diskon", callback_data: `admin_edit_discount` }],
-            [{ text: "📢 Broadcast Pesan", callback_data: `admin_broadcast` }]
+            [
+                { text: "➕ Tambah Produk", callback_data: `admin_add_product` },
+                { text: "🗑️ Hapus Produk", callback_data: `admin_del_product` }
+            ],
+            [
+                { text: "✏️ Ubah Harga", callback_data: `admin_edit_price` }, 
+                { text: "✂️ Atur Diskon", callback_data: `admin_edit_discount` }
+            ],
+            [
+                { text: "📢 Broadcast Pesan", callback_data: `admin_broadcast` }
+            ]
         ]
     };
 
@@ -131,10 +140,20 @@ bot.on('callback_query', async (query) => {
         const productId = data.split('_')[1];
         const product = db.products[productId];
 
-        if (!product) return bot.sendMessage(chatId, "Produk tidak ditemukan.");
+        if (!product) return bot.sendMessage(chatId, "⚠️ Produk tidak ditemukan atau sudah dihapus. Ketik /order untuk memperbarui daftar.");
 
-        userSessions[chatId] = { step: 'WAITING_EMAIL', productId: product.id };
-        bot.sendMessage(chatId, `Membeli: *${product.name}*\n\n✉️ *Silakan kirimkan alamat Email kamu:*`, { parse_mode: "Markdown" });
+        userSessions[chatId] = { productId: product.id };
+
+        // CEK APAKAH PRODUK ALIGHT MOTION (AM) ATAU BUKAN
+        if (product.id === 'am') {
+            // AM butuh email dulu sebelum bayar
+            userSessions[chatId].step = 'WAITING_EMAIL';
+            bot.sendMessage(chatId, `Membeli: *${product.name}*\n\n✉️ *Silakan kirimkan alamat Email kamu* yang akan dijadikan Premium:`, { parse_mode: "Markdown" });
+        } else {
+            // Produk lain (non-AM) langsung buat QRIS tanpa minta email
+            bot.sendMessage(chatId, `⏳ Memproses tagihan untuk *${product.name}*...`, { parse_mode: "Markdown" });
+            buatTagihanQRIS(chatId, product);
+        }
     }
 
     // --- LOGIKA USER CEK PEMBAYARAN ---
@@ -156,17 +175,17 @@ bot.on('callback_query', async (query) => {
                     db.income.push({ date: getTodayDate(), amount: session.finalPrice });
                     saveDB();
 
-                    bot.sendMessage(OWNER_ID, `💸 *PEMBAYARAN MASUK!*\nProduk: ${product.name}\nHarga: Rp ${session.finalPrice}\nEmail: ${session.email}`, { parse_mode: "Markdown" });
+                    bot.sendMessage(OWNER_ID, `💸 *PEMBAYARAN MASUK!*\nProduk: ${product.name}\nHarga: Rp ${session.finalPrice}`, { parse_mode: "Markdown" });
 
-                    if (product.type === 'magic_link') {
-                        // Khusus Alight Motion
+                    if (product.id === 'am') {
+                        // Lanjut minta Magic Link khusus AM
                         session.step = 'WAITING_MAGIC_LINK';
                         bot.sendMessage(chatId, `✅ *Pembayaran Lunas!*\n\nSilakan buka email kamu (\`${session.email}\`), Copy *Magic Link* dari Alight Motion, lalu *Kirimkan ke sini*.`, { parse_mode: "Markdown" });
                     } else {
-                        // Khusus Produk Baru (Langsung kirim Link Login ke Pembeli)
-                        const pesanSukses = `✅ *Pembayaran Lunas!*\n\nTerima kasih telah membeli *${product.name}*.\n\nBerikut adalah *Link Akses / Login* kamu:\n${product.link}\n\nSelamat menggunakan!`;
+                        // Produk lain langsung kirim Link Login ke Pembeli
+                        const pesanSukses = `🎉 *Pembayaran Lunas & Berhasil!*\n\nTerima kasih telah membeli *${product.name}*.\n\nBerikut adalah *Link Akses / Login* kamu:\n${product.link}\n\nSelamat menggunakan!`;
                         bot.sendMessage(chatId, pesanSukses, { parse_mode: "Markdown" });
-                        resetSession(chatId); // Selesai
+                        resetSession(chatId); 
                     }
                 } else if (status === 'pending') {
                     bot.sendMessage(chatId, "⏳ Belum dibayar, jika sudah transfer mohon tunggu sebentar lalu klik lagi.");
@@ -188,7 +207,22 @@ bot.on('callback_query', async (query) => {
         } 
         else if (data === 'admin_add_product') {
             adminSessions[chatId] = { action: 'WAITING_NEW_PRODUCT_NAME' };
-            bot.sendMessage(chatId, "Tuliskan *Nama Produk Baru* yang ingin ditambahkan:", { parse_mode: "Markdown" });
+            bot.sendMessage(chatId, "Tuliskan *Nama Produk Baru*:", { parse_mode: "Markdown" });
+        }
+        else if (data === 'admin_del_product') {
+            // Filter agar produk 'am' (Alight Motion utama) tidak bisa dihapus secara tidak sengaja
+            const listProd = Object.values(db.products).filter(p => p.id !== 'am');
+            if (listProd.length === 0) return bot.sendMessage(chatId, "Tidak ada produk tambahan yang bisa dihapus.");
+            
+            const keyboard = listProd.map(p => [{ text: `🗑️ ${p.name}`, callback_data: `delprod_${p.id}` }]);
+            bot.sendMessage(chatId, "Pilih produk yang ingin dihapus:", { reply_markup: { inline_keyboard: keyboard } });
+        }
+        else if (data.startsWith('delprod_')) {
+            const prodId = data.split('_')[1];
+            const namaProd = db.products[prodId]?.name;
+            delete db.products[prodId];
+            saveDB();
+            bot.sendMessage(chatId, `✅ Produk *${namaProd}* berhasil dihapus!`, { parse_mode: "Markdown" });
         }
         else if (data === 'admin_edit_price' || data === 'admin_edit_discount') {
             const isPrice = data === 'admin_edit_price';
@@ -212,6 +246,42 @@ bot.on('callback_query', async (query) => {
         }
     }
 });
+
+// ================= FUNGSI BANTUAN BUAT QRIS =================
+async function buatTagihanQRIS(chatId, product) {
+    const finalPrice = product.price - product.discount;
+    const session = userSessions[chatId];
+    session.finalPrice = finalPrice;
+
+    try {
+        const responsePG = await axios.post(`${PG_API}/v1/deposit/create`, { amount: finalPrice, method: "qris" }, {
+            headers: { 'X-API-Key': PG_APIKEY, 'Content-Type': 'application/json' }
+        });
+
+        if (responsePG.data && responsePG.data.success) {
+            const depositId = responsePG.data.data.depositId;
+            const qrString = responsePG.data.data.qrString;
+            
+            session.depositId = depositId;
+            session.step = 'WAITING_PAYMENT';
+
+            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrString)}`;
+            const keyboard = { inline_keyboard: [[{ text: "🔄 Cek Pembayaran", callback_data: `check_${depositId}` }]] };
+            
+            let infoText = `✅ *Tagihan Dibuat!*\n\nProduk: ${product.name}\n`;
+            if (session.email) infoText += `Email: \`${session.email}\`\n`;
+            infoText += `Total Bayar: *Rp ${finalPrice}*\n\nSilakan scan QRIS di atas, lalu klik tombol cek pembayaran.`;
+
+            bot.sendPhoto(chatId, qrImageUrl, { caption: infoText, parse_mode: "Markdown", reply_markup: keyboard });
+        } else {
+            bot.sendMessage(chatId, "❌ Gagal membuat tagihan QRIS.");
+            resetSession(chatId);
+        }
+    } catch (error) {
+        bot.sendMessage(chatId, "⚠️ Server pembayaran gangguan.");
+        resetSession(chatId);
+    }
+}
 
 // ================= HANDLER PESAN TEKS =================
 
@@ -248,21 +318,20 @@ bot.on('message', async (msg) => {
             if (isNaN(price)) return bot.sendMessage(chatId, "Harap masukkan angka saja.");
             adminAct.prodPrice = price;
             adminAct.action = 'WAITING_NEW_PRODUCT_LINK';
-            bot.sendMessage(chatId, "Kirimkan *Link Login / Akses* yang akan otomatis dikirimkan ke pembeli setelah mereka berhasil membayar:", { parse_mode: "Markdown" });
+            bot.sendMessage(chatId, "Kirimkan *Link Login / Akses* yang akan otomatis dikirimkan ke pembeli setelah mereka membayar:", { parse_mode: "Markdown" });
             return;
         }
         else if (adminAct.action === 'WAITING_NEW_PRODUCT_LINK') {
             const link = text;
             const prodId = 'prod_' + Date.now(); 
             
-            // Simpan produk ke database
             db.products[prodId] = { 
                 id: prodId, 
                 name: adminAct.prodName, 
                 price: adminAct.prodPrice, 
                 discount: 0, 
                 type: 'login_link',
-                link: link // Menyimpan Link Login
+                link: link 
             };
             saveDB();
             
@@ -294,41 +363,17 @@ bot.on('message', async (msg) => {
     const session = userSessions[chatId];
     if (!session || !text) return;
 
+    // Tahap Input Email khusus Alight Motion
     if (session.step === 'WAITING_EMAIL') {
         if (!text.includes('@') || !text.includes('.')) return bot.sendMessage(chatId, "⚠️ Format email salah.");
         session.email = text;
         
-        bot.sendMessage(chatId, "⏳ Sedang membuat kode QRIS...");
         const product = db.products[session.productId];
-        const finalPrice = product.price - product.discount;
-        session.finalPrice = finalPrice; 
-
-        try {
-            const responsePG = await axios.post(`${PG_API}/v1/deposit/create`, { amount: finalPrice, method: "qris" }, {
-                headers: { 'X-API-Key': PG_APIKEY, 'Content-Type': 'application/json' }
-            });
-
-            if (responsePG.data && responsePG.data.success) {
-                const depositId = responsePG.data.data.depositId;
-                const qrString = responsePG.data.data.qrString;
-                
-                session.depositId = depositId;
-                session.step = 'WAITING_PAYMENT';
-
-                const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrString)}`;
-                const keyboard = { inline_keyboard: [[{ text: "🔄 Cek Pembayaran", callback_data: `check_${depositId}` }]] };
-                
-                bot.sendPhoto(chatId, qrImageUrl, { caption: `✅ *Tagihan Dibuat!*\n\nProduk: ${product.name}\nEmail: \`${session.email}\`\nTotal Bayar: *Rp ${finalPrice}*\n\nSilakan scan dan bayar, lalu klik tombol cek.`, parse_mode: "Markdown", reply_markup: keyboard });
-            } else {
-                bot.sendMessage(chatId, "❌ Gagal membuat tagihan QRIS.");
-                resetSession(chatId);
-            }
-        } catch (error) {
-            bot.sendMessage(chatId, "⚠️ Server pembayaran gangguan.");
-            resetSession(chatId);
-        }
+        bot.sendMessage(chatId, "⏳ Sedang membuat kode QRIS...");
+        buatTagihanQRIS(chatId, product);
     }
 
+    // Tahap Proses AM (Magic Link)
     else if (session.step === 'WAITING_MAGIC_LINK') {
         if (!text.includes('http')) return bot.sendMessage(chatId, "⚠️ Harap masukkan URL (Link) yang valid.");
         bot.sendMessage(chatId, "⏳ Memproses Magic Link ke server...");
@@ -349,4 +394,4 @@ bot.on('message', async (msg) => {
     }
 });
 
-console.log("🤖 Bot Alight Motion + Tambah Produk Otomatis sedang berjalan...");
+console.log("🤖 Bot berjalan dengan pemisahan Alur AM dan Fitur Hapus Produk...");
