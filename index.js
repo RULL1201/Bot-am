@@ -13,7 +13,7 @@ const PG_API = 'https://sobat.aksespg.qzz.io';
 const PG_APIKEY = 'ak_live_c0bd68a111514536b8918d8884decce10020c4fcf1';
 
 // 👑 GANTI DENGAN ID TELEGRAM KAMU (ANGKA)
-const OWNER_ID = 'GANTI_DENGAN_ID_TELEGRAM_KAMU'; 
+const OWNER_ID = '6161191871'; 
 
 // ================= SISTEM DATABASE LOKAL =================
 const DB_FILE = 'database.json';
