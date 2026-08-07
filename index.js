@@ -8,7 +8,7 @@ const bot = new TelegramBot(token, { polling: true });
 const AM_API = 'https://restapidhan.vercel.app';
 const AM_APIKEY = 'freeapikeydhan26';
 
-// Konfigurasi Payment Gateway Tokoshopp (Artan Shop) sesuai dokumentasi
+// Konfigurasi Payment Gateway Tokoshopp (Artan Shop)
 const PG_API = 'https://tokoshopp.web.id';
 const PG_APIKEY = 'artan_4a8fb9cd50ade6cea5fed941bdfedfb2aed2c663';
 
@@ -41,7 +41,7 @@ let memoryDb = {
             price: 25000, 
             discount: 5000, 
             type: 'login_link', 
-            link: 'https://netflix.com/?nftoken=Bgj8vOvcAxL/AQbo/qj3TanmISq1tQnTDf59eb1GiJx2sZcRswOGSe9bGXI7aSxfLyXl4aeW31y7vHRh4o3DVgJ9uEQUrMRBS6S1ewJdwnFVKLCpRWvvd2ZRjI69yEB2C/9WXjPXRjVDcAsgxurdJKF8CcttKdUt5DLNx5A0/B9cn0G85HeJ0YmNdikdm+t6FDAMatB3k/O7AIJbg+GhOwah6FDiKf3xzr8Amm4aWVdAkptXXjYKbFzlI+2pzoDvZxvmpd8jmQGQ5pMSBuTXR11WNM4adVlrzbDjUZp6rlRzBnWgO6v8KE0X4DIWBMO4EidPxO6YYG1+zuNZZ9DC65nxUB2MCcZnpBgGIg4KDPrirX4ODSV/N0J7qA==' 
+            link: 'https://netflix.com/?nftoken=Bgj8vOvcAxL/AUSX4TyiDz+ltMOsy+kdng9fntxmd9ftfWPbxN2OC5FLvpJEmsWROJQjadH1m+QL1gnT3hdJ5tn+dw9ZKw0YLRIm3wIyh+IRuJf7Mepy4sIZIzm8jZQwnsYeSzoMQvbxW9CQyroB9GKbPfv+3GJ+7nOfpxSHYHp4fShq4frNbKgpUKHZU39li9W1guhOzEmd6+qPZcnVfbvH3d+/RZHUrnQ6fq7hv2GlHrqjcDm9QYTSNpsHZ5arwrAuqfZ9ihaYwKKBAzNkEtH2bNME84rbUAVtvVjY4oXgCrN65wuinL8aunH1YQ7JPH/0q5VhodhoGQGtq3J7dWn2Kb59tJJiphgGIg4KDKW332CYT0H1hh9eew==' 
         }
     }
 };
@@ -63,7 +63,18 @@ bot.onText(/\/start/, (msg) => {
     if (!memoryDb.users.includes(chatId)) {
         memoryDb.users.push(chatId);
     }
-    bot.sendMessage(chatId, "👋 Halo! Selamat datang di Bot Auto Order.\n\nKetik /order untuk melihat daftar produk.\nKetik /cancel untuk membatalkan pesanan.");
+
+    // Tombol menu utama beserta tombol Hubungi Admin
+    const keyboard = {
+        inline_keyboard: [
+            [{ text: "🛒 Beli Produk (/order)", callback_data: "menu_order" }],
+            [{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZKENTOD" }]
+        ]
+    };
+
+    bot.sendMessage(chatId, "👋 Halo! Selamat datang di Bot Auto Order.\n\nSilakan klik tombol di bawah untuk melihat produk atau menghubungi admin jika ada kendala.", {
+        reply_markup: keyboard
+    });
 });
 
 bot.onText(/\/cancel/, (msg) => {
@@ -73,7 +84,11 @@ bot.onText(/\/cancel/, (msg) => {
 });
 
 bot.onText(/\/order/, (msg) => {
-    const chatId = msg.chat.id;
+    kirimKatalogProduk(msg.chat.id);
+});
+
+// Fungsi untuk menampilkan daftar produk
+function kirimKatalogProduk(chatId) {
     const products = Object.values(memoryDb.products);
 
     if (products.length === 0) return bot.sendMessage(chatId, "Mohon maaf, saat ini tidak ada produk yang tersedia.");
@@ -85,11 +100,14 @@ bot.onText(/\/order/, (msg) => {
         return [{ text: textBtn, callback_data: `buy_${p.id}` }];
     });
 
+    // Tambahkan tombol Hubungi Admin di bawah katalog produk juga
+    keyboard.push([{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZKENTOD" }]);
+
     bot.sendMessage(chatId, "🛒 *Pilih Produk yang ingin dibeli:*", {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: keyboard }
     });
-});
+}
 
 // ================= FITUR OWNER (ADMIN) =================
 
@@ -136,8 +154,13 @@ bot.on('callback_query', async (query) => {
     const data = query.data;
     bot.answerCallbackQuery(query.id);
 
+    // Menangani tombol menu order dari pesan /start
+    if (data === 'menu_order') {
+        kirimKatalogProduk(chatId);
+    }
+
     // --- LOGIKA USER MEMBELI ---
-    if (data.startsWith('buy_')) {
+    else if (data.startsWith('buy_')) {
         const productId = data.split('_')[1];
         const product = memoryDb.products[productId];
 
@@ -154,7 +177,7 @@ bot.on('callback_query', async (query) => {
         }
     }
 
-    // --- LOGIKA USER CEK PEMBAYARAN (Sesuai dokumentasi baru: POST /api/payment/status) ---
+    // --- LOGIKA USER CEK PEMBAYARAN ---
     else if (data.startsWith('check_')) {
         const transactionId = data.replace('check_', '');
         const session = userSessions[chatId];
@@ -173,7 +196,7 @@ bot.on('callback_query', async (query) => {
             });
             
             if (responseCheck.data && responseCheck.data.success) {
-                const status = responseCheck.data.status; // status: "paid" atau "pending"
+                const status = responseCheck.data.status; 
                 if (status === 'paid' || status === 'success') {
                     const product = memoryDb.products[session.productId];
                     
@@ -231,7 +254,7 @@ bot.on('callback_query', async (query) => {
     }
 });
 
-// ================= FUNGSI BUAT QRIS (Sesuai Dok: POST /api/payment/create) =================
+// ================= FUNGSI BUAT QRIS =================
 async function buatTagihanQRIS(chatId, product) {
     const finalPrice = product.price - product.discount;
     const session = userSessions[chatId];
@@ -251,16 +274,21 @@ async function buatTagihanQRIS(chatId, product) {
 
         if (responsePG.data && responsePG.data.success) {
             const transactionId = responsePG.data.transaction_id;
-            const qrImageBase64 = responsePG.data.qr_image; // Bentuk base64 data:image/png;base64,...
+            const qrImageBase64 = responsePG.data.qr_image; 
             
             session.transactionId = transactionId;
             session.step = 'WAITING_PAYMENT';
 
-            // Mengubah base64 image string menjadi Buffer agar bisa dikirim sebagai foto oleh bot telegram
             const base64Data = qrImageBase64.replace(/^data:image\/\w+;base64,/, "");
             const buffer = Buffer.from(base64Data, 'base64');
 
-            const keyboard = { inline_keyboard: [[{ text: "🔄 Cek Pembayaran", callback_data: `check_${transactionId}` }]] };
+            // Menyertakan tombol Cek Pembayaran dan Hubungi Admin pada pesan tagihan QRIS
+            const keyboard = { 
+                inline_keyboard: [
+                    [{ text: "🔄 Cek Pembayaran", callback_data: `check_${transactionId}` }],
+                    [{ text: "💬 Hubungi Admin", url: "https://t.me/RULZZKENTOD" }]
+                ] 
+            };
             
             let infoText = `✅ *Tagihan Dibuat!*\n\nProduk: ${product.name}\n`;
             if (session.email) infoText += `Email: \`${session.email}\`\n`;
@@ -314,7 +342,6 @@ bot.on('message', async (msg) => {
                 memoryDb.products[prodId].discount = amount;
                 bot.sendMessage(chatId, `✅ Diskon ${memoryDb.products[prodId].name} berhasil diset menjadi Rp ${amount}`);
             }
-            resetAdminSession(adminActId = null);
             resetAdminSession(chatId);
             return;
         }
@@ -353,4 +380,4 @@ bot.on('message', async (msg) => {
     }
 });
 
-console.log("🤖 Bot berjalan stabil dengan Payment Gateway Tokoshopp (Artan Shop)...");
+console.log("🤖 Bot berjalan stabil dengan fitur Hubungi Admin...");
